@@ -6,7 +6,7 @@
 // State Management
 const state = {
   serverUrl: 'http://localhost:8080',
-  adminApiKey: 'test-admin-secret',
+  adminApiKey: 'change-this-to-a-secure-random-admin-secret-key',
   deviceId: null,
   deviceSecret: null,
   claimCode: null,

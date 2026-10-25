@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,6 +82,9 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 func CORSMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	originsMap := make(map[string]bool, len(allowedOrigins))
 	allowAll := false
+	if len(allowedOrigins) == 0 {
+		allowAll = true
+	}
 	for _, o := range allowedOrigins {
 		if o == "*" {
 			allowAll = true
@@ -91,11 +95,24 @@ func CORSMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			if origin != "" && (allowAll || originsMap[origin]) {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
+			isAllowed := allowAll || (origin != "" && (originsMap["*"] || originsMap[origin]))
+			// In development, automatically allow file:// origins (origin == "null"), localhost, and 127.0.0.1
+			if !isAllowed && origin != "" {
+				if origin == "null" || strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") {
+					isAllowed = true
+				}
+			}
+
+			if isAllowed {
+				if origin != "" && origin != "null" {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+				} else {
+					w.Header().Set("Access-Control-Allow-Origin", "*")
+				}
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, X-Admin-Key, X-Request-Id")
 				w.Header().Set("Access-Control-Expose-Headers", "ETag, X-Request-Id")
+				w.Header().Set("Access-Control-Max-Age", "86400")
 			}
 
 			if r.Method == http.MethodOptions {
