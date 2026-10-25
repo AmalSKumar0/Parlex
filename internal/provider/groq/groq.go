@@ -229,7 +229,7 @@ func (s *Session) synthesizeNeuralVoice(text, lang string) []byte {
 	}
 
 	// Choose neural voice based on target language
-	voice := "en-US-AriaNeural"
+	var voice string
 	switch lang {
 	case "ml":
 		voice = "ml-IN-SobhanaNeural"
@@ -241,12 +241,20 @@ func (s *Session) synthesizeNeuralVoice(text, lang string) []byte {
 		voice = "fr-FR-DeniseNeural"
 	case "de":
 		voice = "de-DE-KatjaNeural"
+	case "it":
+		voice = "it-IT-ElsaNeural"
+	case "pt":
+		voice = "pt-BR-FranciscaNeural"
 	case "zh":
 		voice = "zh-CN-XiaoxiaoNeural"
 	case "ja":
 		voice = "ja-JP-NanamiNeural"
+	case "ko":
+		voice = "ko-KR-SunHiNeural"
 	case "ar":
 		voice = "ar-SA-ZariyahNeural"
+	case "ru":
+		voice = "ru-RU-SvetlanaNeural"
 	default:
 		voice = "en-US-AriaNeural"
 	}
@@ -264,10 +272,14 @@ func (s *Session) synthesizeNeuralVoice(text, lang string) []byte {
 	cmd2.Stdout = &out
 
 	if err := cmd1.Start(); err != nil {
+		_ = w.Close()
+		_ = r.Close()
 		return s.fallbackEspeak(text, lang)
 	}
 	if err := cmd2.Start(); err != nil {
 		_ = cmd1.Process.Kill()
+		_ = w.Close()
+		_ = r.Close()
 		return s.fallbackEspeak(text, lang)
 	}
 
@@ -276,7 +288,9 @@ func (s *Session) synthesizeNeuralVoice(text, lang string) []byte {
 		_ = w.Close()
 	}()
 
-	if err := cmd2.Wait(); err != nil || out.Len() == 0 {
+	err := cmd2.Wait()
+	_ = r.Close()
+	if err != nil || out.Len() == 0 {
 		return s.fallbackEspeak(text, lang)
 	}
 
@@ -299,9 +313,14 @@ func (s *Session) fallbackEspeak(text, lang string) []byte {
 	cmd2.Stdout = &out
 
 	if err := cmd1.Start(); err != nil {
+		_ = w.Close()
+		_ = r.Close()
 		return nil
 	}
 	if err := cmd2.Start(); err != nil {
+		_ = cmd1.Process.Kill()
+		_ = w.Close()
+		_ = r.Close()
 		return nil
 	}
 	go func() {
@@ -309,6 +328,7 @@ func (s *Session) fallbackEspeak(text, lang string) []byte {
 		_ = w.Close()
 	}()
 	_ = cmd2.Wait()
+	_ = r.Close()
 
 	return out.Bytes()
 }

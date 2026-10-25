@@ -21,7 +21,7 @@ type Config struct {
 	ProviderRealtimeBaseURL string
 	ProviderAuthMode        string
 	ProviderDefault         string
-	GroqAPIKey             string
+	GroqAPIKey              string
 	DeviceDailyMinutesLimit int
 	MaxTurnSeconds          int
 	DrainTimeoutSeconds     int

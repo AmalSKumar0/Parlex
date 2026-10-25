@@ -21,16 +21,16 @@ func TestCatalog(t *testing.T) {
 
 		provider, err := cat.ResolveProvider("en", "es")
 		require.NoError(t, err)
-		assert.Equal(t, "realtime", provider)
+		assert.Equal(t, "groq", provider)
 	})
 
-	t.Run("Route override to pipeline for Malayalam", func(t *testing.T) {
+	t.Run("Route override for Malayalam", func(t *testing.T) {
 		err := cat.ValidatePair("en", "ml")
 		require.NoError(t, err)
 
 		provider, err := cat.ResolveProvider("en", "ml")
 		require.NoError(t, err)
-		assert.Equal(t, "pipeline", provider)
+		assert.Equal(t, "groq", provider)
 	})
 
 	t.Run("Rejects identical source and destination", func(t *testing.T) {

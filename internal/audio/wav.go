@@ -11,7 +11,7 @@ func EncodeWAV(pcm []byte, sampleRate int) []byte {
 	numChannels := uint16(1)
 	bitsPerSample := uint16(16)
 	byteRate := uint32(sampleRate * int(numChannels) * int(bitsPerSample) / 8)
-	blockAlign := uint16(numChannels * bitsPerSample / 8)
+	blockAlign := numChannels * bitsPerSample / 8
 	subchunk2Size := uint32(len(pcm))
 	chunkSize := 36 + subchunk2Size
 
