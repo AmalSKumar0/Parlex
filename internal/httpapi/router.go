@@ -61,5 +61,12 @@ func NewRouter(
 		})
 	})
 
+	// Static Demo UI routes
+	fs := http.FileServer(http.Dir("demo"))
+	r.Handle("/demo/*", http.StripPrefix("/demo", fs))
+	r.Get("/demo", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/demo/", http.StatusPermanentRedirect)
+	})
+
 	return r
 }

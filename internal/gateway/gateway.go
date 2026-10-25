@@ -61,14 +61,17 @@ func NewGateway(
 
 // ServeHTTP handles the WebSocket handshake and actor lifecycle.
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Validate Authorization
+	// Validate Authorization (Header or query parameter for browser WebSockets)
 	authHdr := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHdr, "Bearer ") {
+	var tokenStr string
+	if strings.HasPrefix(authHdr, "Bearer ") {
+		tokenStr = strings.TrimPrefix(authHdr, "Bearer ")
+	} else if qToken := r.URL.Query().Get("token"); qToken != "" {
+		tokenStr = qToken
+	} else {
 		httpapi.WriteProblem(w, r, http.StatusUnauthorized, httpapi.CodeUnauthorized, "Unauthorized", "Missing Bearer stream token.")
 		return
 	}
-
-	tokenStr := strings.TrimPrefix(authHdr, "Bearer ")
 	claims, err := g.tm.ValidateToken(tokenStr)
 	if err != nil {
 		httpapi.WriteProblem(w, r, http.StatusUnauthorized, httpapi.CodeUnauthorized, "Unauthorized", "Invalid or expired stream token.")

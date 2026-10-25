@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-S3 Hardware Translator Demo | Parlex</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <span class="logo-icon">🎙️</span>
+      <div class="brand-text">
+        <h1>Parlex ESP32-S3 Device Simulator</h1>
+        <p>Interactive Hardware Speech Translator & Companion REST/WebSocket Testbed</p>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="status-pill" id="connPill">
+        <span class="status-dot disconnected"></span>
+        <span class="status-text" id="connStatusText">Disconnected</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- Left Column: The Physical ESP32-S3 Device Emulation -->
+    <section class="device-column">
+      <div class="device-chassis" id="deviceChassis">
+        <!-- Microphone Port Top -->
+        <div class="mic-grille">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+
+        <!-- Device Header: Brand & RGB LED Indicator -->
+        <div class="device-top-bar">
+          <span class="device-brand-badge">PARLEX S3</span>
+          <div class="rgb-led-container">
+            <div class="rgb-led" id="deviceLed" title="RGB Status LED"></div>
+            <span class="led-label" id="ledLabel">OFF</span>
+          </div>
+        </div>
+
+        <!-- 0.96" OLED Screen Display -->
+        <div class="oled-screen" id="oledScreen">
+          <div class="oled-header">
+            <span class="oled-wifi" id="oledWifi">📶 ON</span>
+            <span class="oled-mode" id="oledState">DISCONNECTED</span>
+            <span class="oled-battery" id="oledBattery">🔋 98%</span>
+          </div>
+
+          <div class="oled-body">
+            <div class="oled-langs" id="oledLangs">
+              <span id="oledSrcLang">EN</span>
+              <span class="oled-arrow">➜</span>
+              <span id="oledDstLang">ES</span>
+            </div>
+
+            <!-- Audio Waveform Visualizer on OLED -->
+            <canvas class="oled-canvas" id="oledCanvas" width="220" height="42"></canvas>
+
+            <!-- Caption ticker -->
+            <div class="oled-caption" id="oledCaption">Press & Hold [BTN A] or [BTN B] to Speak</div>
+          </div>
+
+          <div class="oled-footer">
+            <span id="oledVolume">VOL: 70%</span>
+            <span id="oledTurnId">TURN: --</span>
+          </div>
+        </div>
+
+        <!-- Speaker Grille -->
+        <div class="speaker-grille">
+          <div class="grille-slot"></div>
+          <div class="grille-slot"></div>
+          <div class="grille-slot"></div>
+          <div class="grille-slot"></div>
+        </div>
+
+        <!-- Physical Push-to-Talk Buttons A & B -->
+        <div class="ptt-buttons-container">
+          <div class="ptt-button-wrapper">
+            <button class="ptt-button btn-a" id="btnA">
+              <span class="ptt-key-hint">HOLD KEY [A]</span>
+              <span class="ptt-label">BUTTON A</span>
+              <span class="ptt-dir" id="btnADir">EN ➜ ES</span>
+            </button>
+          </div>
+
+          <div class="ptt-button-wrapper">
+            <button class="ptt-button btn-b" id="btnB">
+              <span class="ptt-key-hint">HOLD KEY [B]</span>
+              <span class="ptt-label">BUTTON B</span>
+              <span class="ptt-dir" id="btnBDir">ES ➜ EN</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Bottom Controls: Power & Hardware Reset -->
+        <div class="device-bottom-controls">
+          <button class="small-ctrl-btn" id="btnCancelTurn" title="Cancel in-flight turn">Cancel Turn</button>
+          <span class="firmware-tag" id="firmwareTag">FW v1.0.0</span>
+          <button class="small-ctrl-btn" id="btnPowerCycle" title="Power cycle / reconnect">Power Cycle</button>
+        </div>
+      </div>
+
+      <div class="hardware-hint">
+        💡 <strong>Tip</strong>: Click and hold Button A/B (or press and hold keys <code>A</code> / <code>B</code>) to speak. Release to trigger translation!
+      </div>
+    </section>
+
+    <!-- Right Column: Companion App, Settings, Audio Input & Inspector -->
+    <section class="controls-column">
+      <!-- Tabs Navigation -->
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="tab-quickstart">⚡ Quick Connect</button>
+        <button class="tab-btn" data-tab="tab-settings">📱 Device Settings</button>
+        <button class="tab-btn" data-tab="tab-audio">🎙️ Audio Mode</button>
+        <button class="tab-btn" data-tab="tab-telemetry">📊 Live Inspector</button>
+      </nav>
+
+      <!-- TAB 1: Quick Connect & Credentials -->
+      <div class="tab-content active" id="tab-quickstart">
+        <div class="card">
+          <div class="card-header">
+            <h3>Device Provisioning & Authentication</h3>
+            <span class="badge">WebSocket + REST</span>
+          </div>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="serverUrl">Backend Server URL</label>
+                <input type="text" id="serverUrl" value="http://localhost:8080" placeholder="http://localhost:8080">
+              </div>
+              <div class="form-group flex-1">
+                <label for="adminApiKey">Admin API Key</label>
+                <input type="password" id="adminApiKey" value="test-admin-secret" placeholder="ADMIN_API_KEY">
+              </div>
+            </div>
+
+            <div class="button-row">
+              <button class="btn btn-primary" id="btnOneClickSetup">
+                🚀 1-Click Provision & Connect
+              </button>
+              <button class="btn btn-secondary" id="btnDisconnect">
+                Disconnect
+              </button>
+            </div>
+
+            <div class="credentials-box">
+              <div class="cred-item">
+                <span class="cred-label">Device ID:</span>
+                <span class="cred-value" id="displayDevId">Not provisioned</span>
+              </div>
+              <div class="cred-item">
+                <span class="cred-label">Secret Hash:</span>
+                <span class="cred-value" id="displaySecret">--</span>
+              </div>
+              <div class="cred-item">
+                <span class="cred-label">Claim Code:</span>
+                <span class="cred-value highlight" id="displayClaimCode">--</span>
+                <button class="btn-sm" id="btnClaimDevice">Claim</button>
+              </div>
+              <div class="cred-item">
+                <span class="cred-label">Stream Token:</span>
+                <span class="cred-value" id="displayToken">None (15m validity)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Device Settings (Companion Phone Simulation) -->
+      <div class="tab-content" id="tab-settings">
+        <div class="card">
+          <div class="card-header">
+            <h3>Companion Settings Management</h3>
+            <span class="badge" id="etagBadge">ETag v1</span>
+          </div>
+          <div class="card-body">
+            <p class="section-desc">Manage languages, volume, and captions using optimistic concurrency (<code>If-Match</code>).</p>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="selBtnASrc">Button A Source</label>
+                <select id="selBtnASrc">
+                  <option value="en" selected>English (en)</option>
+                  <option value="es">Spanish (es)</option>
+                  <option value="fr">French (fr)</option>
+                  <option value="de">German (de)</option>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="ml">Malayalam (ml)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="selBtnADst">Button A Target</label>
+                <select id="selBtnADst">
+                  <option value="es" selected>Spanish (es)</option>
+                  <option value="en">English (en)</option>
+                  <option value="fr">French (fr)</option>
+                  <option value="de">German (de)</option>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="ml">Malayalam (ml)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="selBtnBSrc">Button B Source</label>
+                <select id="selBtnBSrc">
+                  <option value="es" selected>Spanish (es)</option>
+                  <option value="en">English (en)</option>
+                  <option value="fr">French (fr)</option>
+                  <option value="de">German (de)</option>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="ml">Malayalam (ml)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="selBtnBDst">Button B Target</label>
+                <select id="selBtnBDst">
+                  <option value="en" selected>English (en)</option>
+                  <option value="es">Spanish (es)</option>
+                  <option value="fr">French (fr)</option>
+                  <option value="de">German (de)</option>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="ml">Malayalam (ml)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row slider-row">
+              <div class="form-group">
+                <label for="rangeVolume">Speaker Volume: <span id="lblVolume">70%</span></label>
+                <input type="range" id="rangeVolume" min="0" max="100" value="70">
+              </div>
+              <div class="form-group">
+                <label for="rangeLed">LED Brightness: <span id="lblLed">50%</span></label>
+                <input type="range" id="rangeLed" min="0" max="100" value="50">
+              </div>
+            </div>
+
+            <div class="form-row checkbox-row">
+              <label class="toggle-switch">
+                <input type="checkbox" id="chkCaptions" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Realtime OLED Text Captions</span>
+              </label>
+            </div>
+
+            <div class="button-row">
+              <button class="btn btn-primary" id="btnSaveSettings">Save Settings (PATCH)</button>
+              <button class="btn btn-secondary" id="btnRefreshSettings">Fetch Latest (GET)</button>
+              <button class="btn btn-secondary" id="btnQueryUsage">Query Quota Usage</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Audio Source Configuration -->
+      <div class="tab-content" id="tab-audio">
+        <div class="card">
+          <div class="card-header">
+            <h3>Audio Input & Codec Pipeline</h3>
+            <span class="badge">16 kHz PCM16</span>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Audio Uplink Source</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="audioSource" value="mic" checked id="radMic">
+                  <span>🎙️ Live Microphone (Web Audio API)</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="audioSource" value="synth" id="radSynth">
+                  <span>🎹 Synthetic Speech Tone (No mic permission required)</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="audio-status-box">
+              <div class="stat-pair">
+                <span>Audio Engine:</span>
+                <strong id="audioCtxStatus">Inactive</strong>
+              </div>
+              <div class="stat-pair">
+                <span>Resampling:</span>
+                <strong>Browser (48k/44.1k) ➜ 16 kHz PCM16 Mono (640B/20ms)</strong>
+              </div>
+              <div class="stat-pair">
+                <span>Downlink Audio Playback:</span>
+                <strong id="playbackStatus">Ready</strong>
+              </div>
+            </div>
+
+            <button class="btn btn-secondary" id="btnTestSpeaker">
+              🔊 Test Device Speaker Output
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: Protocol Telemetry & Frame Inspector -->
+      <div class="tab-content" id="tab-telemetry">
+        <div class="card">
+          <div class="card-header">
+            <h3>Realtime Protocol Telemetry</h3>
+            <button class="btn-sm" id="btnClearLogs">Clear Log</button>
+          </div>
+          <div class="card-body">
+            <div class="telemetry-stats">
+              <div class="stat-card">
+                <span class="stat-title">Uplink Frames</span>
+                <span class="stat-num" id="statUplinkFrames">0</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-title">Downlink Frames</span>
+                <span class="stat-num" id="statDownlinkFrames">0</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-title">First Audio Latency</span>
+                <span class="stat-num highlight" id="statFirstAudio">-- ms</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-title">Total Turn Latency</span>
+                <span class="stat-num" id="statTotalLatency">-- ms</span>
+              </div>
+            </div>
+
+            <div class="console-log" id="consoleLog">
+              <div class="log-entry info">[System] Ready to connect to Parlex translation server.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

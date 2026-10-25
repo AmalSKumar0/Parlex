@@ -138,6 +138,16 @@ make build
 make run
 ```
 
+### 5. Interactive ESP32-S3 Web Simulator & Testbed
+Once the server is running, open the interactive hardware simulator in your browser:
+```text
+http://localhost:8080/demo/
+```
+The demo provides a hardware emulation of the physical ESP32-S3 device:
+- **3D Handheld Chassis & Controls**: Visualizes the 0.96" OLED display with live waveform oscilloscope, tri-color status RGB LED, microphone grille, speaker grille, and dual tactile push-to-talk buttons (`Button A` and `Button B`, keyboard shortcuts `[A]` and `[B]`).
+- **Real-Time Audio**: Captures your real microphone via the Web Audio API (downsampled and encoded to 16 kHz mono PCM16 in 20 ms frames) or generates synthetic speech-like harmonic test tones.
+- **Full Protocol Verification**: Executes 1-click device provisioning (`POST /v1/admin/devices`, `POST /v1/devices/claim`, `POST /v1/auth/device-token`), establishes the `/v1/stream` WebSocket actor connection, handles binary audio framing and JSON control packets, and tests ETag optimistic locking for settings updates.
+
 ---
 
 ## 🧪 Device Simulator & Testing
