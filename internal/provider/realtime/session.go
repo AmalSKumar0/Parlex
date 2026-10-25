@@ -22,6 +22,7 @@ type Session struct {
 
 	eventsCh chan provider.Event
 	outbox   chan []byte
+	wg       sync.WaitGroup
 
 	mu          sync.Mutex
 	inputClosed bool
@@ -44,8 +45,15 @@ func newSession(
 }
 
 func (s *Session) start() {
+	s.wg.Add(2)
 	go s.writeLoop()
 	go s.readLoop()
+
+	go func() {
+		s.wg.Wait()
+		close(s.eventsCh)
+		_ = s.conn.Close(websocket.StatusNormalClosure, "session ended")
+	}()
 }
 
 func (s *Session) InputFormat() provider.AudioFormat {
@@ -124,6 +132,8 @@ func (s *Session) Abort() {
 }
 
 func (s *Session) writeLoop() {
+	defer s.wg.Done()
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -136,12 +146,17 @@ func (s *Session) writeLoop() {
 			err := s.conn.Write(writeCtx, websocket.MessageText, msg)
 			cancelWrite()
 			if err != nil {
-				s.emitEvent(provider.Event{
-					Kind: provider.EventFailed,
-					Err:  fmt.Errorf("realtime websocket write failed: %w", err),
-				})
-				s.Abort()
-				return
+				select {
+				case <-s.ctx.Done():
+					return
+				default:
+					s.emitEvent(provider.Event{
+						Kind: provider.EventFailed,
+						Err:  fmt.Errorf("realtime websocket write failed: %w", err),
+					})
+					s.Abort()
+					return
+				}
 			}
 		}
 	}
@@ -158,10 +173,8 @@ type realtimeServerEvent struct {
 }
 
 func (s *Session) readLoop() {
-	defer close(s.eventsCh)
-	defer func() {
-		_ = s.conn.Close(websocket.StatusNormalClosure, "session ended")
-	}()
+	defer s.wg.Done()
+	defer s.cancel()
 
 	for {
 		_, data, err := s.conn.Read(s.ctx)
