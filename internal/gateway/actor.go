@@ -71,13 +71,14 @@ type Actor struct {
 	settingsMu sync.RWMutex
 	settings   store.DeviceSetting
 
-	currentTurn    *TurnMetrics
-	activeSession  provider.Session
-	activeEvents   <-chan provider.Event
-	firstAudioSent bool
-	downlinkChunk  *audio.FrameChunker
-	expectedSeq    uint32
-	downlinkSeq    uint32
+	currentTurn     *TurnMetrics
+	activeSession   provider.Session
+	activeEvents    <-chan provider.Event
+	firstAudioSent  bool
+	downlinkChunk   *audio.FrameChunker
+	expectedSeq     uint32
+	downlinkSeq     uint32
+	negotiatedCodec string
 
 	maxTurnTimer  *time.Timer
 	drainTimer    *time.Timer
@@ -97,20 +98,21 @@ func NewActor(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Actor{
-		deviceID:      deviceID,
-		cfg:           cfg,
-		sm:            NewStateMachine(),
-		db:            db,
-		provRouter:    provRouter,
-		metrics:       metrics,
-		logger:        logger.With(slog.String("device_id", deviceID.String())),
-		conn:          conn,
-		ctx:           ctx,
-		cancel:        cancel,
-		inbox:         make(chan IncomingCommand, 64),
-		outbox:        make(chan OutgoingMessage, 128),
-		settings:      initialSettings,
-		downlinkChunk: audio.NewFrameChunker(640), // 20 ms @ 16 kHz
+		deviceID:        deviceID,
+		cfg:             cfg,
+		sm:              NewStateMachine(),
+		db:              db,
+		provRouter:      provRouter,
+		metrics:         metrics,
+		logger:          logger.With(slog.String("device_id", deviceID.String())),
+		conn:            conn,
+		ctx:             ctx,
+		cancel:          cancel,
+		inbox:           make(chan IncomingCommand, 64),
+		outbox:          make(chan OutgoingMessage, 128),
+		settings:        initialSettings,
+		downlinkChunk:   audio.NewFrameChunker(640), // 20 ms @ 16 kHz
+		negotiatedCodec: "pcm16",
 	}
 }
 
@@ -363,9 +365,18 @@ func (a *Actor) handleHello(raw []byte) {
 	curSettings := a.settings
 	a.settingsMu.RUnlock()
 
+	chosenCodec := "pcm16"
+	for _, c := range hello.Codecs {
+		if c == "opus" {
+			chosenCodec = "opus"
+			break
+		}
+	}
+	a.negotiatedCodec = chosenCodec
+
 	ready := ReadyMessage{
 		Type:       TypeReady,
-		Codec:      "pcm16",
+		Codec:      chosenCodec,
 		Settings:   httpapi.FormatSettingsResponse(curSettings),
 		ServerTime: time.Now().Unix(),
 		Limits: map[string]any{
@@ -739,7 +750,7 @@ func (a *Actor) handleProviderEvent(ev provider.Event) {
 			startMsg, _ := json.Marshal(AudioStartMessage{
 				Type:     TypeAudioStart,
 				TurnID:   turnID,
-				Codec:    "pcm16",
+				Codec:    a.negotiatedCodec,
 				Rate:     16000,
 				Channels: 1,
 			})

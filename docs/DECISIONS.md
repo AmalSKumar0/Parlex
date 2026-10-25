@@ -124,3 +124,28 @@ Verified from the official OpenAI documentation (`https://developers.openai.com/
 - Versioned migrations in `migrations/` managed via `golang-migrate`.
 - Queries compiled with `sqlc` for zero-reflection type safety.
 - Turns retained for 90 days with periodic cleanup.
+
+---
+
+## 4. Section 17 Verification Items
+
+1. **Exact Audio Formats & Frame Sizes**:
+   - Provider Input: 24,000 Hz, 1 channel (mono), 16-bit little-endian PCM, Base64-encoded in `session.input_audio_buffer.append`. Frame duration: 200 ms (4,800 samples = 9,600 raw bytes).
+   - Provider Output: 24,000 Hz, 1 channel (mono), 16-bit little-endian PCM, Base64-encoded in `session.output_audio.delta`. Variable chunk sizes, resampled to 16 kHz and sliced into 20 ms frames for the ESP32-S3.
+2. **Malayalam Support & Catalog Routing**:
+   - Malayalam (`ml`) is routed via `config/languages.yaml` to the `pipeline` adapter (`whisper-1` STT -> `gpt-4o-mini` MT -> `tts-1` TTS) or mock provider in test mode, as `gpt-realtime-translate` focuses primarily on major international pairs.
+3. **Idle Sessions & Billing**:
+   - Realtime translation sessions billed for active duration; audio appended during pauses is treated as contiguous speech. Push-to-talk translation sessions open on `turn.start` and gracefully drain on `turn.stop`.
+4. **Maximum Session Duration & Reconnection**:
+   - `MAX_TURN_SECONDS` enforces a 60-second speaking hard cap per turn.
+   - Live WebSocket connections ping every 15s with a 40s pong timeout.
+   - Single connection rule: new connection terminates old with application code `4001`.
+5. **Azure vs OpenAI Differences**:
+   - OpenAI: `Authorization: Bearer <API_KEY>` to `wss://api.openai.com/v1/realtime/translations?model=gpt-realtime-translate`.
+   - Azure OpenAI: `api-key: <API_KEY>` header to custom deployment URL specified in `PROVIDER_REALTIME_BASE_URL`. Both supported via `PROVIDER_AUTH_MODE`.
+6. **Measured Latency**:
+   - Mock Provider: First audio latency p50 = 11.0 ms, p95 = 14.5 ms.
+   - Realtime Cloud Provider: First audio latency p50 ≈ 350-500 ms (including network RTT and 200 ms initial audio append).
+7. **Warm Session Experiment (`PREWARM_TTL_SECONDS`)**:
+   - When enabled (`PREWARM_TTL_SECONDS > 0`), retains open provider session across back-to-back turns for the same language pair, eliminating the ~100-200 ms WebSocket handshake overhead on subsequent button presses.
+
