@@ -1,0 +1,183 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Device Connectivity & Traffic",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Active WebSocket Connections",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "translator_ws_connections",
+          "legendFormat": "Active Connections",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "ops" }
+      },
+      "gridPos": { "h": 6, "w": 18, "x": 6, "y": 1 },
+      "id": 2,
+      "title": "Translation Turn Rate by Status",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(translator_turns_total[1m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "id": 101,
+      "title": "Latency & Turn Timings",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "First Audio Latency (turn.start -> first audio)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(translator_first_audio_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(translator_first_audio_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "title": "Turn Total Duration (turn.start -> playback.done)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(translator_turn_total_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(translator_turn_total_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 102,
+      "title": "Audio Volumes & Provider Health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 17 },
+      "id": 5,
+      "title": "Audio Streamed per Second (In vs Out)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(translator_audio_in_seconds_total[1m])",
+          "legendFormat": "Audio In",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(translator_audio_out_seconds_total[1m])",
+          "legendFormat": "Audio Out",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 17 },
+      "id": 6,
+      "title": "Circuit Breaker State (0=Closed, 1=Open, 2=Half-Open)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "translator_breaker_state",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 17 },
+      "id": 7,
+      "title": "Protocol Violations & Queue Overflows",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (code) (rate(translator_protocol_violations_total[5m]))",
+          "legendFormat": "Violation: {{code}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (queue) (rate(translator_queue_overflow_total[5m]))",
+          "legendFormat": "Overflow: {{queue}}",
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["translator", "parlex", "iot"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Translator Device Gateway Overview",
+  "uid": "translator-gateway-overview",
+  "version": 1
+}

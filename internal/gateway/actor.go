@@ -154,6 +154,9 @@ func (a *Actor) sendText(data []byte) {
 	select {
 	case a.outbox <- OutgoingMessage{IsBinary: false, Data: data}:
 	case <-time.After(2 * time.Second):
+		if a.metrics != nil {
+			a.metrics.QueueOverflowTotal.WithLabelValues("outbox").Inc()
+		}
 		a.logger.Error("outbox full for 2s, closing connection")
 		a.Close("outbox_overflow")
 	}
@@ -163,12 +166,18 @@ func (a *Actor) sendBinary(data []byte) {
 	select {
 	case a.outbox <- OutgoingMessage{IsBinary: true, Data: data}:
 	case <-time.After(2 * time.Second):
+		if a.metrics != nil {
+			a.metrics.QueueOverflowTotal.WithLabelValues("outbox").Inc()
+		}
 		a.logger.Error("outbox full for 2s, closing connection")
 		a.Close("outbox_overflow")
 	}
 }
 
 func (a *Actor) sendError(code, message string, retryable bool, turnID *uint16) {
+	if a.metrics != nil {
+		a.metrics.ProtocolViolations.WithLabelValues(code).Inc()
+	}
 	errPayload, _ := json.Marshal(ErrorMessage{
 		Type:      TypeError,
 		Code:      code,
@@ -252,6 +261,9 @@ func (a *Actor) pushInbox(cmd IncomingCommand) {
 	select {
 	case a.inbox <- cmd:
 	case <-time.After(2 * time.Second):
+		if a.metrics != nil {
+			a.metrics.QueueOverflowTotal.WithLabelValues("inbox").Inc()
+		}
 		a.logger.Error("inbox full for 2s, closing connection")
 		a.Close("inbox_overflow")
 	}
