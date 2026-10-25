@@ -600,7 +600,7 @@ function queuePcmForPlayback(pcmArrayBuffer) {
 
   const currentTime = state.audioCtx.currentTime;
   if (state.nextPlayTime < currentTime) {
-    state.nextPlayTime = currentTime;
+    state.nextPlayTime = currentTime + 0.05; // 50ms jitter buffer to prevent underflow crackle
   }
 
   srcNode.start(state.nextPlayTime);
@@ -704,32 +704,69 @@ function cancelTurn() {
   clearOledWaveform();
 }
 
+function downsampleTo16k(input, inRate) {
+  if (inRate === 16000) return input;
+  const ratio = inRate / 16000;
+  const outLength = Math.round(input.length / ratio);
+  const output = new Float32Array(outLength);
+  for (let i = 0; i < outLength; i++) {
+    const origPos = i * ratio;
+    const i0 = Math.floor(origPos);
+    const i1 = Math.min(i0 + 1, input.length - 1);
+    const frac = origPos - i0;
+    output[i] = input[i0] * (1 - frac) + input[i1] * frac;
+  }
+  return output;
+}
+
 function startAudioUplink() {
   state.isRecording = true;
 
   if (el.radMic.checked && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    initAudioContext();
+    if (state.audioCtx.state === 'suspended') {
+      state.audioCtx.resume();
+    }
+
     // Live Microphone capture
-    navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } })
+    navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    })
       .then(stream => {
         state.micStream = stream;
         const source = state.audioCtx.createMediaStreamSource(stream);
         
-        // Use ScriptProcessor / AudioWorklet to get 20ms chunks (320 samples = 640 bytes @ 16kHz)
-        const bufferSize = 512;
+        // 2048 buffer for smooth processing
+        const bufferSize = 2048;
         const processor = state.audioCtx.createScriptProcessor(bufferSize, 1, 1);
+        
+        // Mute monitoring output to prevent acoustic feedback loop into mic
+        const muteNode = state.audioCtx.createGain();
+        muteNode.gain.value = 0;
         source.connect(processor);
-        processor.connect(state.audioCtx.destination);
+        processor.connect(muteNode);
+        muteNode.connect(state.audioCtx.destination);
         state.micProcessor = processor;
 
+        const inSampleRate = state.audioCtx.sampleRate;
         let accumulated = [];
+
         processor.onaudioprocess = (e) => {
           if (!state.isRecording) return;
-          const inputData = e.inputBuffer.getChannelData(0);
-          drawWaveform(inputData);
+          const rawInput = e.inputBuffer.getChannelData(0);
+          drawWaveform(rawInput);
 
-          for (let i = 0; i < inputData.length; i++) {
-            accumulated.push(inputData[i]);
-            if (accumulated.length >= 320) { // 20ms @ 16kHz = 320 samples
+          // Resample from hardware rate (typically 48000Hz or 44100Hz) to exact 16000Hz
+          const resampled = downsampleTo16k(rawInput, inSampleRate);
+
+          for (let i = 0; i < resampled.length; i++) {
+            accumulated.push(resampled[i]);
+            if (accumulated.length >= 320) { // exactly 20ms @ 16kHz (320 samples = 640 bytes)
               const chunk = accumulated.slice(0, 320);
               accumulated = accumulated.slice(320);
               sendAudioFrame(chunk);
@@ -738,7 +775,7 @@ function startAudioUplink() {
         };
       })
       .catch(err => {
-        log('warn', `Microphone permission denied: ${err.message}. Switching to Synthetic speech tone.`);
+        log('warn', `Microphone permission error: ${err.message}. Switching to Synthetic speech tone.`);
         el.radSynth.checked = true;
         startSyntheticAudioStream();
       });
