@@ -177,11 +177,42 @@ function updateConnectionUI(stateName) {
   }
 }
 
+function applyServerSettings(s) {
+  if (!s) return;
+  if (s.version) state.settings.version = s.version;
+
+  const extractPair = (btn, fallbackSrc, fallbackDst) => {
+    if (!btn) return { src: fallbackSrc, dst: fallbackDst };
+    return {
+      src: (btn.source || btn.src || fallbackSrc).toLowerCase(),
+      dst: (btn.target || btn.dst || fallbackDst).toLowerCase()
+    };
+  };
+
+  if (s.button_a || s.buttonA) {
+    state.settings.buttonA = extractPair(s.button_a || s.buttonA, 'en', 'es');
+  }
+  if (s.button_b || s.buttonB) {
+    state.settings.buttonB = extractPair(s.button_b || s.buttonB, 'es', 'en');
+  }
+  if (typeof s.volume === 'number') state.settings.volume = s.volume;
+  if (typeof s.captions === 'boolean') state.settings.captions = s.captions;
+  if (typeof s.led_level === 'number') state.settings.ledLevel = s.led_level;
+  if (typeof s.ledLevel === 'number') state.settings.ledLevel = s.ledLevel;
+
+  updateSettingsDisplay();
+}
+
 function updateSettingsDisplay() {
-  el.oledSrcLang.textContent = state.settings.buttonA.src.toUpperCase();
-  el.oledDstLang.textContent = state.settings.buttonA.dst.toUpperCase();
-  el.btnADir.textContent = `${state.settings.buttonA.src.toUpperCase()} ➜ ${state.settings.buttonA.dst.toUpperCase()}`;
-  el.btnBDir.textContent = `${state.settings.buttonB.src.toUpperCase()} ➜ ${state.settings.buttonB.dst.toUpperCase()}`;
+  const btnASrc = (state.settings.buttonA?.src || 'en').toUpperCase();
+  const btnADst = (state.settings.buttonA?.dst || 'es').toUpperCase();
+  const btnBSrc = (state.settings.buttonB?.src || 'es').toUpperCase();
+  const btnBDst = (state.settings.buttonB?.dst || 'en').toUpperCase();
+
+  el.oledSrcLang.textContent = btnASrc;
+  el.oledDstLang.textContent = btnADst;
+  el.btnADir.textContent = `${btnASrc} ➜ ${btnADst}`;
+  el.btnBDir.textContent = `${btnBSrc} ➜ ${btnBDst}`;
   el.oledVolume.textContent = `VOL: ${state.settings.volume}%`;
   el.lblVolume.textContent = `${state.settings.volume}%`;
   el.lblLed.textContent = `${state.settings.ledLevel}%`;
@@ -190,10 +221,10 @@ function updateSettingsDisplay() {
   el.chkCaptions.checked = state.settings.captions;
   el.etagBadge.textContent = `ETag v${state.settings.version}`;
 
-  el.selBtnASrc.value = state.settings.buttonA.src;
-  el.selBtnADst.value = state.settings.buttonA.dst;
-  el.selBtnBSrc.value = state.settings.buttonB.src;
-  el.selBtnBDst.value = state.settings.buttonB.dst;
+  el.selBtnASrc.value = btnASrc.toLowerCase();
+  el.selBtnADst.value = btnADst.toLowerCase();
+  el.selBtnBSrc.value = btnBSrc.toLowerCase();
+  el.selBtnBDst.value = btnBDst.toLowerCase();
 }
 
 /* ==========================================================
@@ -298,15 +329,8 @@ async function fetchSettings() {
   });
 
   if (res.ok) {
-    const s = res.body;
-    state.settings.version = s.version;
-    state.settings.buttonA = s.button_a;
-    state.settings.buttonB = s.button_b;
-    state.settings.volume = s.volume;
-    state.settings.captions = s.captions;
-    state.settings.ledLevel = s.led_level;
-    updateSettingsDisplay();
-    log('info', `Settings loaded from server (version ${s.version}).`);
+    applyServerSettings(res.body);
+    log('info', `Settings loaded from server (version ${state.settings.version}).`);
   }
 }
 
@@ -343,15 +367,8 @@ async function saveSettings() {
   });
 
   if (res.ok) {
-    const s = res.body;
-    state.settings.version = s.version;
-    state.settings.buttonA = s.button_a;
-    state.settings.buttonB = s.button_b;
-    state.settings.volume = s.volume;
-    state.settings.captions = s.captions;
-    state.settings.ledLevel = s.led_level;
-    updateSettingsDisplay();
-    log('success', `Settings updated to version ${s.version}!`);
+    applyServerSettings(res.body);
+    log('success', `Settings updated to version ${state.settings.version}!`);
   } else if (res.status === 412) {
     log('warn', 'ETag conflict (412 Precondition Failed). Refreshing latest settings...');
     await fetchSettings();
@@ -447,12 +464,7 @@ function handleTextControlMessage(msg) {
     case 'ready':
       log('success', `Handshake accepted! Negotiated codec: ${msg.codec}`);
       if (msg.settings) {
-        state.settings.buttonA = msg.settings.button_a;
-        state.settings.buttonB = msg.settings.button_b;
-        state.settings.volume = msg.settings.volume;
-        state.settings.captions = msg.settings.captions;
-        state.settings.ledLevel = msg.settings.led_level;
-        updateSettingsDisplay();
+        applyServerSettings(msg.settings);
       }
       updateConnectionUI('IDLE');
       el.oledCaption.textContent = 'Ready. Hold [A] or [B] to Speak.';
