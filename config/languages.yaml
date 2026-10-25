@@ -1,0 +1,79 @@
+default_provider: realtime
+
+languages:
+  - code: en
+    name: English
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: es
+    name: Spanish
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: fr
+    name: French
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: de
+    name: German
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: it
+    name: Italian
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: pt
+    name: Portuguese
+    as_source: true
+    as_target: true
+
+    
+    provider: realtime
+  - code: hi
+    name: Hindi
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: ja
+    name: Japanese
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: ko
+    name: Korean
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: zh
+    name: Chinese
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: ar
+    name: Arabic
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: ru
+    name: Russian
+    as_source: true
+    as_target: true
+    provider: realtime
+  - code: ml
+    name: Malayalam
+    as_source: true
+    as_target: true
+    provider: pipeline
+
+# Explicit routing overrides for specific source -> destination language pairs
+routes:
+  - src: en
+    dst: ml
+    provider: pipeline
+  - src: ml
+    dst: en
+    provider: pipeline

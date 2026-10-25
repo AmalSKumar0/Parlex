@@ -1,0 +1,497 @@
+openapi: 3.0.3
+info:
+  title: Translator Device Backend API
+  version: 1.0.0
+  description: Backend REST API for ESP32-S3 push-to-talk speech translator devices and companion mobile app.
+
+paths:
+  /health/live:
+    get:
+      summary: Liveness check
+      responses:
+        '200':
+          description: Process is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /health/ready:
+    get:
+      summary: Readiness check
+      responses:
+        '200':
+          description: Database reachable and ready to serve traffic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+        '503':
+          description: Database unreachable or configuration invalid
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /v1/languages:
+    get:
+      summary: Get language catalog and directions
+      responses:
+        '200':
+          description: List of supported languages and routing
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Language'
+
+  /v1/admin/devices:
+    post:
+      summary: Register a new device
+      security:
+        - AdminKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Device-A1
+      responses:
+        '201':
+          description: Device created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device_id:
+                    type: string
+                    format: uuid
+                  device_secret:
+                    type: string
+                    description: 32-byte secret (hex/base64 encoded), displayed once
+                  claim_code:
+                    type: string
+                    description: 10-character single-use claim code
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/admin/devices/{id}/revoke:
+    post:
+      summary: Revoke a device
+      security:
+        - AdminKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Device revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: revoked
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/admin/firmware:
+    post:
+      summary: Register a firmware release
+      security:
+        - AdminKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, url, sha256]
+              properties:
+                version:
+                  type: string
+                  example: v1.1.0
+                url:
+                  type: string
+                  format: uri
+                sha256:
+                  type: string
+                min_version:
+                  type: string
+      responses:
+        '201':
+          description: Firmware registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirmwareRelease'
+
+  /v1/devices/claim:
+    post:
+      summary: Claim device ownership with claim code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [claim_code]
+              properties:
+                claim_code:
+                  type: string
+                  example: ABC234XYZ9
+      responses:
+        '200':
+          description: Claim succeeded, returns owner token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device_id:
+                    type: string
+                    format: uuid
+                  owner_token:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/auth/device-token:
+    post:
+      summary: Exchange device secret for a 15-minute stream token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id, device_secret]
+              properties:
+                device_id:
+                  type: string
+                  format: uuid
+                device_secret:
+                  type: string
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+                  ws_url:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/devices/{id}/settings:
+    get:
+      summary: Read device settings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Device settings
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceSettings'
+    patch:
+      summary: Update device settings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSettingsRequest'
+      responses:
+        '200':
+          description: Settings updated
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceSettings'
+        '412':
+          description: Precondition Failed (stale version or ETag mismatch)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /v1/devices/{id}/status:
+    get:
+      summary: Get device online status and state
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Device status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  online:
+                    type: boolean
+                  last_seen_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  firmware:
+                    type: string
+                  turn_state:
+                    type: string
+                    example: IDLE
+
+  /v1/devices/{id}/usage:
+    get:
+      summary: Get daily usage metrics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Usage per day
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date:
+                      type: string
+                      format: date
+                    minutes_used:
+                      type: number
+
+  /v1/firmware/latest:
+    get:
+      summary: Check for latest firmware release
+      parameters:
+        - name: current
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latest firmware available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirmwareRelease'
+        '204':
+          description: Device firmware is already up to date
+
+components:
+  securitySchemes:
+    AdminKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Language:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        as_source:
+          type: boolean
+        as_target:
+          type: boolean
+        provider:
+          type: string
+
+    ButtonConfig:
+      type: object
+      required: [source, target]
+      properties:
+        source:
+          type: string
+          example: en
+        target:
+          type: string
+          example: es
+
+    DeviceSettings:
+      type: object
+      properties:
+        version:
+          type: integer
+          example: 1
+        button_a:
+          $ref: '#/components/schemas/ButtonConfig'
+        button_b:
+          $ref: '#/components/schemas/ButtonConfig'
+        volume:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 70
+        captions:
+          type: boolean
+          example: false
+        led_level:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 50
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        button_a:
+          $ref: '#/components/schemas/ButtonConfig'
+        button_b:
+          $ref: '#/components/schemas/ButtonConfig'
+        volume:
+          type: integer
+          minimum: 0
+          maximum: 100
+        captions:
+          type: boolean
+        led_level:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    FirmwareRelease:
+      type: object
+      properties:
+        version:
+          type: string
+        url:
+          type: string
+        sha256:
+          type: string
+        min_version:
+          type: string
+          nullable: true
+
+    ProblemDetails:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+        request_id:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Not Found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    BadRequest:
+      description: Bad Request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
