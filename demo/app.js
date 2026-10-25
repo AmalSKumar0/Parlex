@@ -479,9 +479,34 @@ function handleTextControlMessage(msg) {
       break;
 
     case 'text':
-      // Live transcript captions
-      if (state.settings.captions) {
-        el.oledCaption.textContent = `[${msg.kind}]: ${msg.delta}`;
+      // Live transcript captions & voice synthesis
+      if (msg.kind === 'target') {
+        el.oledCaption.textContent = msg.delta;
+        log('success', `[Translation ➜ "${msg.delta}"]`);
+
+        // Speak aloud in English voice using browser Web Speech API
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utter = new SpeechSynthesisUtterance(msg.delta);
+          utter.lang = 'en-US';
+          utter.rate = 1.0;
+          utter.pitch = 1.0;
+          utter.onstart = () => {
+            updateConnectionUI('PLAYING');
+          };
+          utter.onend = () => {
+            log('info', 'English voice synthesis completed.');
+            updateConnectionUI('IDLE');
+            sendJson({
+              t: 'playback.done',
+              turn_id: msg.turn_id
+            });
+          };
+          window.speechSynthesis.speak(utter);
+        }
+      } else {
+        log('info', `[Recognized Input: "${msg.delta}"]`);
+        el.oledCaption.textContent = msg.delta;
       }
       break;
 
@@ -499,10 +524,13 @@ function handleTextControlMessage(msg) {
       break;
 
     case 'audio.end':
-      log('info', `Downlink audio ended for turn #${msg.turn_id} (reason: ${msg.reason})`);
+      log('info', `Turn #${msg.turn_id} ended (reason: ${msg.reason})`);
       if (state.turnStartTime > 0) {
         state.stats.totalLatencyMs = Date.now() - state.turnStartTime;
         el.statTotalLatency.textContent = `${state.stats.totalLatencyMs} ms`;
+      }
+      if (!state.isPlayingDownlink && (!('speechSynthesis' in window) || !window.speechSynthesis.speaking)) {
+        updateConnectionUI('IDLE');
       }
       break;
 

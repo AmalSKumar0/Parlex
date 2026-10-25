@@ -67,9 +67,14 @@ func (r *Router) ResolveAndOpen(ctx context.Context, d Direction) (Session, stri
 	r.mu.RUnlock()
 
 	if !ok {
-		// Fallback to mock or whatever is registered
+		// Fallback to groq or mock if resolved provider is not registered
 		r.mu.RLock()
-		if mockP, mockOk := r.providers["mock"]; mockOk {
+		if groqP, groqOk := r.providers["groq"]; groqOk {
+			p = groqP
+			cb = r.breakers["groq"]
+			providerName = "groq"
+			ok = true
+		} else if mockP, mockOk := r.providers["mock"]; mockOk {
 			p = mockP
 			cb = r.breakers["mock"]
 			providerName = "mock"

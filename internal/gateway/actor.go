@@ -800,8 +800,14 @@ func (a *Actor) handleProviderEvent(ev provider.Event) {
 		}
 
 		if !a.firstAudioSent {
-			// Provider ended with no audio
+			// Provider ended with text-only (e.g. STT/MT translation)
 			_ = a.sm.Transition("provider.done")
+			endMsg, _ := json.Marshal(AudioEndMessage{
+				Type:   TypeAudioEnd,
+				TurnID: turnID,
+				Reason: "done",
+			})
+			a.sendText(endMsg)
 			a.finishTurn("completed", nil)
 			return
 		}

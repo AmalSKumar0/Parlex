@@ -19,6 +19,7 @@ import (
 	"parlex/internal/httpapi"
 	"parlex/internal/observability"
 	"parlex/internal/provider"
+	"parlex/internal/provider/groq"
 	"parlex/internal/provider/mock"
 	"parlex/internal/provider/realtime"
 	"parlex/internal/store"
@@ -96,6 +97,15 @@ func main() {
 		breaker := provider.NewCircuitBreaker(5, 30*time.Second, 20*time.Second)
 		provRouter.Register(provider.WrapWithBreaker(realtimeAdapter, breaker))
 		logger.Info("realtime cloud translation provider registered")
+	}
+
+	if cfg.GroqAPIKey != "" {
+		groqAdapter := groq.New(groq.Config{
+			APIKey: cfg.GroqAPIKey,
+		})
+		breaker := provider.NewCircuitBreaker(5, 30*time.Second, 20*time.Second)
+		provRouter.Register(provider.WrapWithBreaker(groqAdapter, breaker))
+		logger.Info("groq whisper/llama cloud translation provider registered")
 	}
 
 	gw := gateway.NewGateway(cfg, db, tm, rev, provRouter, metrics, logger)

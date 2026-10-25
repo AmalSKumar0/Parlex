@@ -21,6 +21,7 @@ type Config struct {
 	ProviderRealtimeBaseURL string
 	ProviderAuthMode        string
 	ProviderDefault         string
+	GroqAPIKey             string
 	DeviceDailyMinutesLimit int
 	MaxTurnSeconds          int
 	DrainTimeoutSeconds     int
@@ -73,6 +74,7 @@ func LoadFromEnv() (*Config, error) {
 		ProviderRealtimeBaseURL: getEnv("PROVIDER_REALTIME_BASE_URL", "wss://api.openai.com/v1/realtime/translations"),
 		ProviderAuthMode:        getEnv("PROVIDER_AUTH_MODE", "bearer"),
 		ProviderDefault:         getEnv("PROVIDER_DEFAULT", "realtime"),
+		GroqAPIKey:              os.Getenv("GROQ_API_KEY"),
 		LogLevel:                getEnv("LOG_LEVEL", "info"),
 	}
 
@@ -88,12 +90,16 @@ func LoadFromEnv() (*Config, error) {
 		errs = append(errs, "ADMIN_API_KEY is required")
 	}
 
-	if cfg.ProviderDefault != "mock" && cfg.ProviderDefault != "pipeline" && cfg.ProviderDefault != "realtime" {
-		errs = append(errs, fmt.Sprintf("invalid PROVIDER_DEFAULT %q: must be realtime, pipeline, or mock", cfg.ProviderDefault))
+	if cfg.ProviderDefault != "mock" && cfg.ProviderDefault != "pipeline" && cfg.ProviderDefault != "realtime" && cfg.ProviderDefault != "groq" {
+		errs = append(errs, fmt.Sprintf("invalid PROVIDER_DEFAULT %q: must be realtime, pipeline, groq, or mock", cfg.ProviderDefault))
 	}
 
 	if cfg.ProviderDefault == "realtime" && cfg.ProviderRealtimeAPIKey == "" {
 		errs = append(errs, "PROVIDER_REALTIME_API_KEY is required when PROVIDER_DEFAULT is realtime")
+	}
+
+	if cfg.ProviderDefault == "groq" && cfg.GroqAPIKey == "" {
+		errs = append(errs, "GROQ_API_KEY is required when PROVIDER_DEFAULT is groq")
 	}
 
 	if cfg.ProviderAuthMode != "bearer" && cfg.ProviderAuthMode != "azure-api-key" {
