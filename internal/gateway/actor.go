@@ -404,7 +404,11 @@ func (a *Actor) handleTurnStart(raw []byte) {
 	a.settingsMu.RUnlock()
 
 	dir := provider.Direction{Src: src, Dst: dst}
+	openStart := time.Now()
 	sess, providerName, err := a.provRouter.ResolveAndOpen(a.ctx, dir)
+	if a.metrics != nil {
+		a.metrics.ProviderOpenSeconds.Observe(time.Since(openStart).Seconds())
+	}
 	if err != nil {
 		a.logger.Error("failed opening provider session", slog.Any("error", err))
 		a.sendError(httpapi.CodeProviderUnavailable, "translation provider unavailable", true, &ts.TurnID)
@@ -467,6 +471,15 @@ func (a *Actor) handleBinaryUplink(bin *BinaryMessage) {
 
 	a.expectedSeq++
 	turn.AudioInBytes += len(bin.Payload)
+
+	if a.cfg.DeviceDailyMinutesLimit > 0 {
+		maxBytes := a.cfg.DeviceDailyMinutesLimit * 60 * 32000
+		if turn.AudioInBytes > maxBytes {
+			a.sendError(httpapi.CodeQuotaExceeded, "daily audio quota exceeded", false, &turn.TurnID)
+			a.abortCurrentTurn("quota")
+			return
+		}
+	}
 
 	// Resample 16 kHz to provider input format (24 kHz)
 	resampled, err := audio.ResamplePCM16(bin.Payload, 16000, sess.InputFormat().SampleRate)
@@ -604,6 +617,17 @@ func (a *Actor) finishTurn(status string, errCode *string) {
 			slog.Int("total_ms", int(totalMs)),
 			slog.Any("error_code", turn.ErrorCode),
 		)
+
+		if a.metrics != nil {
+			dir := fmt.Sprintf("%s->%s", turn.SrcLang, turn.DstLang)
+			a.metrics.TurnsTotal.WithLabelValues(dir, turn.Provider, turn.Status).Inc()
+			a.metrics.AudioInSecondsTotal.Add(float64(audioInMs) / 1000.0)
+			a.metrics.AudioOutSecondsTotal.Add(float64(audioOutMs) / 1000.0)
+			a.metrics.TurnTotalSeconds.Observe(float64(totalMs) / 1000.0)
+			if firstAudioMs != nil {
+				a.metrics.FirstAudioSeconds.Observe(float64(*firstAudioMs) / 1000.0)
+			}
+		}
 
 		// Persist turn in database
 		if a.db != nil {

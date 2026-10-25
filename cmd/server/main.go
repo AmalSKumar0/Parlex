@@ -133,6 +133,9 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("graceful server shutdown failed", slog.Any("error", err))
 	}
+	if err := gw.Shutdown(shutdownCtx); err != nil {
+		logger.Error("graceful gateway shutdown failed", slog.Any("error", err))
+	}
 	if err := internalSrv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("graceful internal server shutdown failed", slog.Any("error", err))
 	}

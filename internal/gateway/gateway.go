@@ -231,3 +231,56 @@ func (g *Gateway) OnSettingsUpdated(deviceID uuid.UUID, settings store.DeviceSet
 		actor.PushSettingsUpdate(settings)
 	}
 }
+
+// Shutdown stops accepting connections, sends bye to all connected devices, and waits for turns to complete up to 30s.
+func (g *Gateway) Shutdown(ctx context.Context) error {
+	g.mu.Lock()
+	actors := make([]*Actor, 0, len(g.actors))
+	for _, a := range g.actors {
+		actors = append(actors, a)
+	}
+	g.mu.Unlock()
+
+	byeMsg, _ := json.Marshal(ByeMessage{Type: TypeBye, Reason: "shutdown"})
+	for _, a := range actors {
+		a.sendText(byeMsg)
+	}
+
+	// Drain in-flight turns
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			allIdle := true
+			g.mu.RLock()
+			for _, a := range g.actors {
+				if a.State() != StateIdle && a.State() != StateConnected {
+					allIdle = false
+					break
+				}
+			}
+			g.mu.RUnlock()
+
+			if allIdle {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+
+	for _, a := range actors {
+		a.Close("server_shutdown")
+	}
+	return nil
+}

@@ -28,6 +28,7 @@ type Config struct {
 	WSPingIntervalSeconds   int
 	WSPongTimeoutSeconds    int
 	PrewarmTTLSeconds       int
+	MaxProviderSessions     int
 	CORSAllowedOrigins      []string
 	LogLevel                string
 }
@@ -123,6 +124,10 @@ func LoadFromEnv() (*Config, error) {
 		errs = append(errs, err.Error())
 	}
 	cfg.PrewarmTTLSeconds, err = parseEnvInt("PREWARM_TTL_SECONDS", 0)
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+	cfg.MaxProviderSessions, err = parseEnvInt("MAX_PROVIDER_SESSIONS", 200)
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
