@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -94,4 +95,36 @@ func (cb *CircuitBreaker) State() BreakerState {
 		return StateHalfOpen
 	}
 	return cb.state
+}
+
+// ProtectedProvider wraps a Provider with a CircuitBreaker on Open.
+type ProtectedProvider struct {
+	inner Provider
+	cb    *CircuitBreaker
+}
+
+// WrapWithBreaker wraps a Provider with the specified CircuitBreaker.
+func WrapWithBreaker(inner Provider, cb *CircuitBreaker) Provider {
+	return &ProtectedProvider{inner: inner, cb: cb}
+}
+
+func (p *ProtectedProvider) Name() string {
+	return p.inner.Name()
+}
+
+func (p *ProtectedProvider) Supports(d Direction) bool {
+	return p.inner.Supports(d)
+}
+
+func (p *ProtectedProvider) Open(ctx context.Context, d Direction) (Session, error) {
+	if !p.cb.Allow() {
+		return nil, ErrCircuitOpen
+	}
+	sess, err := p.inner.Open(ctx, d)
+	if err != nil {
+		p.cb.RecordFailure()
+		return nil, err
+	}
+	p.cb.RecordSuccess()
+	return sess, nil
 }

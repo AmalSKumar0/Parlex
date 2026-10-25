@@ -20,6 +20,7 @@ import (
 	"parlex/internal/observability"
 	"parlex/internal/provider"
 	"parlex/internal/provider/mock"
+	"parlex/internal/provider/realtime"
 	"parlex/internal/store"
 )
 
@@ -85,6 +86,17 @@ func main() {
 	provRouter := provider.NewRouter(cat)
 	mockAdapter := mock.New(mock.Config{EchoDelay: 50 * time.Millisecond})
 	provRouter.Register(mockAdapter)
+
+	if cfg.ProviderRealtimeAPIKey != "" {
+		realtimeAdapter := realtime.New(realtime.Config{
+			BaseURL:  cfg.ProviderRealtimeBaseURL,
+			APIKey:   cfg.ProviderRealtimeAPIKey,
+			AuthMode: cfg.ProviderAuthMode,
+		})
+		breaker := provider.NewCircuitBreaker(5, 30*time.Second, 20*time.Second)
+		provRouter.Register(provider.WrapWithBreaker(realtimeAdapter, breaker))
+		logger.Info("realtime cloud translation provider registered")
+	}
 
 	gw := gateway.NewGateway(cfg, db, tm, rev, provRouter, metrics, logger)
 	handlers := httpapi.NewHandlers(cfg, db, tm, rev, cat, gw, logger)
