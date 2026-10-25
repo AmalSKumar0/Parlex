@@ -95,7 +95,11 @@ func LoadFromEnv() (*Config, error) {
 	}
 
 	if cfg.ProviderDefault == "realtime" && cfg.ProviderRealtimeAPIKey == "" {
-		errs = append(errs, "PROVIDER_REALTIME_API_KEY is required when PROVIDER_DEFAULT is realtime")
+		if cfg.GroqAPIKey != "" {
+			cfg.ProviderDefault = "groq"
+		} else {
+			errs = append(errs, "PROVIDER_REALTIME_API_KEY is required when PROVIDER_DEFAULT is realtime")
+		}
 	}
 
 	if cfg.ProviderDefault == "groq" && cfg.GroqAPIKey == "" {
