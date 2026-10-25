@@ -479,31 +479,10 @@ function handleTextControlMessage(msg) {
       break;
 
     case 'text':
-      // Live transcript captions & voice synthesis
+      // Live transcript captions
       if (msg.kind === 'target') {
         el.oledCaption.textContent = msg.delta;
         log('success', `[Translation ➜ "${msg.delta}"]`);
-
-        // Speak aloud in English voice using browser Web Speech API
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const utter = new SpeechSynthesisUtterance(msg.delta);
-          utter.lang = 'en-US';
-          utter.rate = 1.0;
-          utter.pitch = 1.0;
-          utter.onstart = () => {
-            updateConnectionUI('PLAYING');
-          };
-          utter.onend = () => {
-            log('info', 'English voice synthesis completed.');
-            updateConnectionUI('IDLE');
-            sendJson({
-              t: 'playback.done',
-              turn_id: msg.turn_id
-            });
-          };
-          window.speechSynthesis.speak(utter);
-        }
       } else {
         log('info', `[Recognized Input: "${msg.delta}"]`);
         el.oledCaption.textContent = msg.delta;
