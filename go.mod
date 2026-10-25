@@ -3,6 +3,7 @@ module parlex
 go 1.23.2
 
 require (
+	github.com/coder/websocket v1.8.12
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang-migrate/migrate/v4 v4.17.1
@@ -11,6 +12,7 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.33.0
+	go.uber.org/goleak v1.3.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

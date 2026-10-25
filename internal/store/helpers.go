@@ -45,3 +45,16 @@ func NullTimestamptz(t *time.Time) pgtype.Timestamptz {
 	}
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
+
+// Int4 converts an int32 into a valid pgtype.Int4.
+func Int4(n int32) pgtype.Int4 {
+	return pgtype.Int4{Int32: n, Valid: true}
+}
+
+// NullInt4 converts an optional int32 into pgtype.Int4.
+func NullInt4(n *int32) pgtype.Int4 {
+	if n == nil {
+		return pgtype.Int4{Valid: false}
+	}
+	return pgtype.Int4{Int32: *n, Valid: true}
+}

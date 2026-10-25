@@ -399,7 +399,7 @@ func (h *Handlers) GetDeviceSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, settings.Version))
-	WriteJSON(w, http.StatusOK, formatSettingsResponse(settings))
+	WriteJSON(w, http.StatusOK, FormatSettingsResponse(settings))
 }
 
 // UpdateDeviceSettings handles partial updates, requiring If-Match.
@@ -534,7 +534,7 @@ func (h *Handlers) UpdateDeviceSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, updated.Version))
-	WriteJSON(w, http.StatusOK, formatSettingsResponse(updated))
+	WriteJSON(w, http.StatusOK, FormatSettingsResponse(updated))
 }
 
 // GetDeviceStatus returns online flag, firmware, last seen, and turn state.
@@ -679,8 +679,9 @@ func (h *Handlers) GetLatestFirmware(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, fw)
 }
 
-func formatSettingsResponse(s store.DeviceSetting) map[string]any {
+func FormatSettingsResponse(s store.DeviceSetting) map[string]any {
 	return map[string]any{
+
 		"version": s.Version,
 		"button_a": map[string]string{
 			"source": s.ButtonASrc,

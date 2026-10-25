@@ -15,8 +15,11 @@ import (
 	"parlex/internal/auth"
 	"parlex/internal/catalog"
 	"parlex/internal/config"
+	"parlex/internal/gateway"
 	"parlex/internal/httpapi"
 	"parlex/internal/observability"
+	"parlex/internal/provider"
+	"parlex/internal/provider/mock"
 	"parlex/internal/store"
 )
 
@@ -79,8 +82,13 @@ func main() {
 	internalSrv := observability.StartInternalServer(ctx, cfg.InternalAddr, metrics)
 	logger.Info("internal server started", slog.String("addr", cfg.InternalAddr))
 
-	handlers := httpapi.NewHandlers(cfg, db, tm, rev, cat, nil, logger)
-	router := httpapi.NewRouter(cfg, handlers, tm, rev, nil, logger)
+	provRouter := provider.NewRouter(cat)
+	mockAdapter := mock.New(mock.Config{EchoDelay: 50 * time.Millisecond})
+	provRouter.Register(mockAdapter)
+
+	gw := gateway.NewGateway(cfg, db, tm, rev, provRouter, metrics, logger)
+	handlers := httpapi.NewHandlers(cfg, db, tm, rev, cat, gw, logger)
+	router := httpapi.NewRouter(cfg, handlers, tm, rev, gw.ServeHTTP, logger)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
