@@ -5,4 +5,6 @@ dist/
 *.out
 .env
 .env.local
+config/*.pem
 .DS_Store
+

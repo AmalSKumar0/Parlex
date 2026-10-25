@@ -1,3 +1,6 @@
+-include .env
+export
+
 .PHONY: all build run test lint migrate sqlc sim docker
 
 all: lint test build

@@ -60,6 +60,8 @@ func (c *Config) WSPongTimeout() time.Duration {
 
 // LoadFromEnv loads and validates environment variables.
 func LoadFromEnv() (*Config, error) {
+	loadDotEnv(".env")
+
 	cfg := &Config{
 		HTTPAddr:                getEnv("HTTP_ADDR", ":8080"),
 		InternalAddr:            getEnv("INTERNAL_ADDR", "127.0.0.1:9090"),
@@ -166,4 +168,28 @@ func parseEnvInt(key string, defaultVal int) (int, error) {
 		return 0, fmt.Errorf("invalid %s: %w", key, err)
 	}
 	return n, nil
+}
+
+func loadDotEnv(filePath string) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		val = strings.Trim(val, `"'`)
+		if _, exists := os.LookupEnv(key); !exists {
+			_ = os.Setenv(key, val)
+		}
+	}
 }
