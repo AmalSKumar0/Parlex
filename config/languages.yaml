@@ -1,79 +1,77 @@
-default_provider: realtime
+default_provider: groq
 
 languages:
   - code: en
     name: English
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: es
     name: Spanish
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: fr
     name: French
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: de
     name: German
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: it
     name: Italian
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: pt
     name: Portuguese
     as_source: true
     as_target: true
-
-    
-    provider: realtime
+    provider: groq
   - code: hi
     name: Hindi
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: ja
     name: Japanese
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: ko
     name: Korean
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: zh
     name: Chinese
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: ar
     name: Arabic
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: ru
     name: Russian
     as_source: true
     as_target: true
-    provider: realtime
+    provider: groq
   - code: ml
     name: Malayalam
     as_source: true
     as_target: true
-    provider: pipeline
+    provider: groq
 
 # Explicit routing overrides for specific source -> destination language pairs
 routes:
   - src: en
     dst: ml
-    provider: pipeline
+    provider: groq
   - src: ml
     dst: en
-    provider: pipeline
+    provider: groq

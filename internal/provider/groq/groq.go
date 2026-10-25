@@ -9,6 +9,8 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -47,11 +49,11 @@ func (p *Provider) Open(ctx context.Context, d provider.Direction) (provider.Ses
 		direction:  d,
 		ctx:        sessCtx,
 		cancel:     cancel,
-		eventsCh:   make(chan provider.Event, 32),
+		eventsCh:   make(chan provider.Event, 64),
 		audioQueue: make(chan []byte, 128),
 		audioBuf:   make([]byte, 0, 96000),
 		client: &http.Client{
-			Timeout: 20 * time.Second,
+			Timeout: 25 * time.Second,
 		},
 	}
 	go sess.run()
@@ -131,7 +133,7 @@ func (s *Session) Abort() {
 func (s *Session) run() {
 	defer close(s.eventsCh)
 
-	// Collect audio until CloseInput
+	// Ingest audio frames from device
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -160,15 +162,17 @@ processAudio:
 	}
 
 	wavData := audio.EncodeWAV(s.audioBuf, 16000)
+	var translatedText string
 
 	// If translating to English, Groq's audio/translations translates speech directly to English
 	if s.direction.Dst == "en" {
-		translatedText, err := s.callGroqTranslation(wavData)
+		var err error
+		translatedText, err = s.callGroqTranslation(wavData)
 		if err != nil {
 			s.eventsCh <- provider.Event{
-				Kind:  provider.EventFailed,
-				Err:   err,
-				Text:  err.Error(),
+				Kind: provider.EventFailed,
+				Err:  err,
+				Text: err.Error(),
 			}
 			return
 		}
@@ -195,12 +199,13 @@ processAudio:
 		}
 
 		// 2. Translate with LLaMA 3.3 70B
-		translatedText, err := s.callGroqChatTranslate(srcText, s.direction.Dst)
-		if err != nil {
+		var err2 error
+		translatedText, err2 = s.callGroqChatTranslate(srcText, s.direction.Dst)
+		if err2 != nil {
 			s.eventsCh <- provider.Event{
 				Kind: provider.EventFailed,
-				Err:  err,
-				Text: err.Error(),
+				Err:  err2,
+				Text: err2.Error(),
 			}
 			return
 		}
@@ -211,11 +216,107 @@ processAudio:
 		}
 	}
 
+	// 3. Synthesize English/Target Speech Audio (16kHz mono PCM16)
+	if translatedText != "" {
+		pcmAudio := s.synthesizeSpeechAudio(translatedText, s.direction.Dst)
+		if len(pcmAudio) > 0 {
+			chunkSize := 640 // 20ms @ 16kHz
+			for i := 0; i < len(pcmAudio); i += chunkSize {
+				end := i + chunkSize
+				if end > len(pcmAudio) {
+					end = len(pcmAudio)
+				}
+				select {
+				case <-s.ctx.Done():
+					return
+				case s.eventsCh <- provider.Event{
+					Kind: provider.EventAudioOut,
+					PCM:  pcmAudio[i:end],
+				}:
+				}
+			}
+		}
+	}
+
 	// Emit Done event
 	select {
 	case <-s.ctx.Done():
 	case s.eventsCh <- provider.Event{Kind: provider.EventDone}:
 	}
+}
+
+func (s *Session) synthesizeSpeechAudio(text, lang string) []byte {
+	if text == "" {
+		return nil
+	}
+	// Try Google TTS first (natural voice)
+	if pcm := s.tryGoogleTTS(text, lang); len(pcm) > 0 {
+		return pcm
+	}
+	// Fallback to local espeak-ng / espeak
+	if pcm := s.tryEspeakTTS(text, lang); len(pcm) > 0 {
+		return pcm
+	}
+	return nil
+}
+
+func (s *Session) tryGoogleTTS(text, lang string) []byte {
+	targetLang := "en"
+	if lang != "" {
+		targetLang = lang
+	}
+	u := fmt.Sprintf("https://translate.google.com/translate_tts?ie=UTF-8&tl=%s&client=tw-ob&q=%s",
+		url.QueryEscape(targetLang), url.QueryEscape(text))
+
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	res, err := s.client.Do(req)
+	if err != nil || res.StatusCode != http.StatusOK {
+		return nil
+	}
+	defer res.Body.Close()
+
+	// Convert MP3 to 16kHz mono PCM16 via ffmpeg
+	cmd := exec.CommandContext(s.ctx, "ffmpeg", "-i", "-", "-f", "s16le", "-ar", "16000", "-ac", "1", "-")
+	cmd.Stdin = res.Body
+	out, err := cmd.Output()
+	if err != nil || len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (s *Session) tryEspeakTTS(text, lang string) []byte {
+	voice := "en-us"
+	if lang != "en" && lang != "" {
+		voice = lang
+	}
+	cmd1 := exec.CommandContext(s.ctx, "espeak-ng", "-v", voice, "-s", "145", "--stdout", text)
+	cmd2 := exec.CommandContext(s.ctx, "ffmpeg", "-i", "-", "-f", "s16le", "-ar", "16000", "-ac", "1", "-")
+
+	r, w := io.Pipe()
+	cmd1.Stdout = w
+	cmd2.Stdin = r
+
+	var out bytes.Buffer
+	cmd2.Stdout = &out
+
+	if err := cmd1.Start(); err != nil {
+		return nil
+	}
+	if err := cmd2.Start(); err != nil {
+		return nil
+	}
+	go func() {
+		_ = cmd1.Wait()
+		_ = w.Close()
+	}()
+	_ = cmd2.Wait()
+
+	return out.Bytes()
 }
 
 func (s *Session) callGroqTranslation(wavBytes []byte) (string, error) {
